@@ -9,7 +9,7 @@ import java.util.Map;
 import jojomodding.parsergenerator.converter.ParserGenerator;
 import jojomodding.parsergenerator.grammar.Grammar;
 import jojomodding.parsergenerator.grammar.ProductionItem;
-import jojomodding.parsergenerator.grammar.TerminalOrEnd;
+import jojomodding.parsergenerator.grammar.Terminal;
 import jojomodding.parsergenerator.pda.PushDownAutomaton;
 import jojomodding.parsergenerator.pda.action.Action;
 import jojomodding.parsergenerator.pda.action.ActionAccept;
@@ -45,22 +45,22 @@ public class Main {
     }
 
     public static void runPDA() {
-        List<Map<List<TerminalOrEnd<Character>>, Action<Character>>> actionTable = List.of(
-                Map.of(List.of(TerminalOrEnd.ofNullable('a')), new ActionShift<>(),
-                        List.of(TerminalOrEnd.ofNullable('b')), new ActionErr<>(),
-                        List.of(TerminalOrEnd.ofNullable(null)), new ActionReduce<>(n("S"), of())),
-                Map.of(List.of(TerminalOrEnd.ofNullable('a')), new ActionShift<>(),
-                        List.of(TerminalOrEnd.ofNullable('b')), new ActionReduce<>(n("S"), of()),
-                        List.of(TerminalOrEnd.ofNullable(null)), new ActionErr<>()),
-                Map.of(List.of(TerminalOrEnd.ofNullable('a')), new ActionErr<>(),
-                        List.of(TerminalOrEnd.ofNullable('b')), new ActionShift<>(),
-                        List.of(TerminalOrEnd.ofNullable(null)), new ActionErr<>()),
-                Map.of(List.of(TerminalOrEnd.ofNullable('a')), new ActionErr<>(),
-                        List.of(TerminalOrEnd.ofNullable('b')), new ActionReduce<>(n("S"), of(t('a'), n("S"), t('b'))),
-                        List.of(TerminalOrEnd.ofNullable(null)), new ActionReduce<>(n("S"), of(t('a'), n("S"), t('b')))),
-                Map.of(List.of(TerminalOrEnd.ofNullable('a')), new ActionErr<>(),
-                        List.of(TerminalOrEnd.ofNullable('b')), new ActionErr<>(),
-                        List.of(TerminalOrEnd.ofNullable(null)), new ActionAccept<>()));
+        List<Map<List<Character>, Action<Character>>> actionTable = List.of(
+                Map.of(List.of('a'), new ActionShift<>(),
+                        List.of('b'), new ActionErr<>(),
+                        List.of(), new ActionReduce<>(n("S"), of())),
+                Map.of(List.of('a'), new ActionShift<>(),
+                        List.of('b'), new ActionReduce<>(n("S"), of()),
+                        List.of(), new ActionErr<>()),
+                Map.of(List.of('a'), new ActionErr<>(),
+                        List.of('b'), new ActionShift<>(),
+                        List.of(), new ActionErr<>()),
+                Map.of(List.of('a'), new ActionErr<>(),
+                        List.of('b'), new ActionReduce<>(n("S"), of(t('a'), n("S"), t('b'))),
+                        List.of(), new ActionReduce<>(n("S"), of(t('a'), n("S"), t('b')))),
+                Map.of(List.of('a'), new ActionErr<>(),
+                        List.of('b'), new ActionErr<>(),
+                        List.of(), new ActionAccept<>()));
         List<Map<ProductionItem<Character>, Integer>> goToTable = List.of(
                 Map.of(t('a'), 1, n("S"), 4),
                 Map.of(t('a'), 1, n("S"), 2),

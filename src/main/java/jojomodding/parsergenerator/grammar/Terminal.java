@@ -5,7 +5,7 @@ package jojomodding.parsergenerator.grammar;
  * @param terminal the terminal.
  * @param <T> the type of the terminal.
  */
-public record Terminal<T>(T terminal) implements ProductionItem<T>, TerminalOrEnd<T> {
+public record Terminal<T>(T terminal) implements ProductionItem<T>{
 
     @Override
     public boolean isWellFormed(Grammar<T> t) {

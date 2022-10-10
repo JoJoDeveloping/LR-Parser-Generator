@@ -12,13 +12,11 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import jojomodding.parsergenerator.grammar.EndMarker;
 import jojomodding.parsergenerator.grammar.Grammar;
 import jojomodding.parsergenerator.grammar.NonTerminal;
 import jojomodding.parsergenerator.grammar.ProductionItem;
 import jojomodding.parsergenerator.grammar.ProductionRule;
 import jojomodding.parsergenerator.grammar.Terminal;
-import jojomodding.parsergenerator.grammar.TerminalOrEnd;
 import jojomodding.parsergenerator.pda.PushDownAutomaton;
 import jojomodding.parsergenerator.pda.action.Action;
 import jojomodding.parsergenerator.pda.action.ActionAccept;
@@ -52,7 +50,7 @@ public class ParserGenerator<T> {
      * The First_n() set, for each grammar. Note that if n==0, we pretend n==1.
      * Before use, call computeFirstFollow()
      */
-    private final Map<NonTerminal<T>, Set<List<TerminalOrEnd<T>>>> follow = new HashMap<>();
+    private final Map<NonTerminal<T>, Set<List<T>>> follow = new HashMap<>();
 
     /**
      * Constructs a new parser generator.
@@ -77,28 +75,23 @@ public class ParserGenerator<T> {
     public PushDownAutomaton<T> build() {
         var transitions = buildDFA();
         Map<Set<ProductionRuleItem<T>>, Integer> labeling = new HashMap<>();
-        Map<Integer, Set<ProductionRuleItem<T>>> reverseLabelling = new HashMap<>();
         Set<ProductionRuleItem<T>> initial = null, error = Set.of();
         labeling.put(error, -1);
-        reverseLabelling.put(-1, error);
         for (var k : transitions.keySet()) {
             if (k.stream().anyMatch(x -> x.from().equals(grammar.getInitial()) && x.before().items().isEmpty())) {
                 initial = k;
             }
         }
         labeling.put(initial, 0);
-        reverseLabelling.put(0, initial);
         int i = 1;
         for (var k : transitions.keySet()) {
             if (!labeling.containsKey(k)) {
                 labeling.put(k, i);
-                reverseLabelling.put(i, k);
                 i++;
             }
         }
         var errorID = labeling.get(error);
         System.out.println("Initial: " + labeling.get(initial));
-        System.out.println("Error: " + labeling.get(error));
         List<Entry<Set<ProductionRuleItem<T>>, Integer>> toSort = new ArrayList<>(labeling.entrySet());
         toSort.sort(Comparator.comparingInt(Entry::getValue));
         boolean hasConflicts = false;
@@ -120,7 +113,7 @@ public class ParserGenerator<T> {
         } else {
             System.out.println("Grammar is LR(" + n_actual + ")");
         }
-        List<Map<List<TerminalOrEnd<T>>, Action<T>>> actionTable = new ArrayList<>(i);
+        List<Map<List<T>, Action<T>>> actionTable = new ArrayList<>(i);
         List<Map<ProductionItem<T>, Integer>> gotoTable = new ArrayList<>(i);
         for (int j = 0; j < i; j++) {
             actionTable.add(new HashMap<>());
@@ -131,7 +124,7 @@ public class ParserGenerator<T> {
                 continue;
             }
             Map<ProductionItem<T>, Integer> gotoEntry = gotoTable.get(e.getValue());
-            Map<List<TerminalOrEnd<T>>, Action<T>> actionEntry = actionTable.get(e.getValue());
+            Map<List<T>, Action<T>> actionEntry = actionTable.get(e.getValue());
             for (var to : transitions.get(e.getKey()).entrySet()) {
                 if (to.getValue().isEmpty()) {
                     continue;
@@ -148,11 +141,11 @@ public class ParserGenerator<T> {
                         } else {
                             actionEntry.put(state.lookahead(), new ActionReduce<>(state.from(), state.before()));
                         }
-                    } else if (state.from().equals(grammar.getInitial()) && (n_actual == 0 || state.lookahead().equals(List.of(new EndMarker<>())))) {
-                        actionEntry.put(List.of(new EndMarker<>()), new ActionAccept<>());
+                    } else if (state.from().equals(grammar.getInitial()) && state.lookahead().equals(List.of())) {
+                        actionEntry.put(List.of(), new ActionAccept<>());
                     }
                 } else if (state.firstAfterDot().get() instanceof Terminal<T> t) {
-                    for (List<TerminalOrEnd<T>> lookahead : lookaheadFor(state)) {
+                    for (List<T> lookahead : lookaheadFor(state)) {
                         actionEntry.put(lookahead, new ActionShift<>());
                     }
                 }
@@ -169,12 +162,12 @@ public class ParserGenerator<T> {
      * @param s The production item, i.e. X -> a . b | C
      * @return The set of next possible parsed strings, up to length n.
      */
-    private Set<List<TerminalOrEnd<T>>> lookaheadFor(ProductionRuleItem<T> s) {
-        Set<List<TerminalOrEnd<T>>> firsts = Set.of(List.of());
+    private Set<List<T>> lookaheadFor(ProductionRuleItem<T> s) {
+        Set<List<T>> firsts = Set.of(List.of());
         for (var nt : s.after().items()) {
-            firsts = appendFirsts(firsts, Terminal<T>::new, nt);
+            firsts = appendFirsts(firsts, nt);
         }
-        return n_actual == 0 ? firsts : appendAll(firsts, Function.identity(), () -> Stream.of(s.lookahead()));
+        return n_actual == 0 ? firsts : appendAll(firsts, () -> Stream.of(s.lookahead()));
     }
 
     /**
@@ -227,7 +220,7 @@ public class ParserGenerator<T> {
                     continue;
                 }
                 if (item.firstAfterDot().get() instanceof NonTerminal<T> nt) {
-                    Set<List<TerminalOrEnd<T>>> followed = Set.of(List.of());
+                    Set<List<T>> followed = Set.of(List.of());
                     if (n_actual > 0) {
                         followed = lookaheadFor(item.advanceOne());
                     }
@@ -253,7 +246,7 @@ public class ParserGenerator<T> {
         Map<Set<ProductionRuleItem<T>>, Map<ProductionItem<T>, Set<ProductionRuleItem<T>>>> result = new HashMap<>();
         Set<Set<ProductionRuleItem<T>>> states = new HashSet<>();
         states.add(closure(Set.of(new ProductionRuleItem<>(grammar.getInitial(), new ProductionRule<>(List.of()), grammar.getInitialProductionRule(),
-                n_actual > 0 ? List.of(new EndMarker<>()) : List.of()))));
+                List.of()))));
         outer:
         while (true) {
             for (var state : states) {
@@ -282,34 +275,28 @@ public class ParserGenerator<T> {
     }
 
     /**
-     * Given a set of words W over U, and V over X, construct {k : w ++ inj@v | w in W, v in V}.
-     * For instance, if inj is the identity, this is the set of all words in W, concatenated to each word in V.
-     * Since the type of characters in the words in V might differ, the function inj is applied to each character.
+     * Given a set of words W over U, and V over X, construct {k : w ++ v | w in W, v in V}.
+     * In other words, this is the set of all words in W, concatenated to each word in V.
      * @param w the set W
-     * @param inj the injection X -> U
      * @param u the set V
      * @return the set of truncated concatenations.
-     * @param <U> the type of characters of the strings in W
-     * @param <X> the type of characters of the strings in V
      */
-    private <U, X> Set<List<U>> appendAll(Set<List<U>> w, Function<X, U> inj, Supplier<Stream<List<X>>> u) {
-        return w.stream().flatMap(x -> u.get().map(y -> Utils.concatLimit(n, x, y.stream().map(inj).toList())))
+    private <U> Set<List<U>> appendAll(Set<List<U>> w, Supplier<Stream<List<U>>> u) {
+        return w.stream().flatMap(x -> u.get().map(y -> Utils.concatLimit(n, x, y)))
                 .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
      * Concatenates to each string in w each string in the First() set of item.
      * @param w the set w
-     * @param inj a function to translate characters from T to U
      * @param item the item
      * @return a set, containing for each element of w and each string in First(item), the concatenation of these two, truncated at n.
-     * @param <U> the type of strings in w.
      */
-    private <U> Set<List<U>> appendFirsts(Set<List<U>> w, Function<T, U> inj, ProductionItem<T> item) {
+    private Set<List<T>> appendFirsts(Set<List<T>> w, ProductionItem<T> item) {
         if (item instanceof NonTerminal<T> nt) {
-            return appendAll(w, inj, () -> first.get(nt).stream());
+            return appendAll(w, () -> first.get(nt).stream());
         } else if (item instanceof Terminal<T> t) {
-            return appendAll(w, inj, () -> Stream.of(List.of(t.terminal())));
+            return appendAll(w, () -> Stream.of(List.of(t.terminal())));
         } else {
             throw new RuntimeException();
         }
@@ -323,16 +310,16 @@ public class ParserGenerator<T> {
             first.put(T, new HashSet<>());
             follow.put(T, new HashSet<>());
         }
-        follow.get(grammar.getInitial()).add(List.of(new EndMarker<>()));
+        follow.get(grammar.getInitial()).add(List.of());
         while (true) {
             boolean change = false;
             for (var T : grammar.getNonTerminals()) {
                 for (var rule : grammar.getProductionRules().get(T)) {
                     Set<List<T>> partialFirst = Set.of(List.of());
-                    Map<NonTerminal<T>, Set<List<TerminalOrEnd<T>>>> partialFollows = new HashMap<>();
+                    Map<NonTerminal<T>, Set<List<T>>> partialFollows = new HashMap<>();
                     for (var item : rule.items()) {
-                        partialFirst = appendFirsts(partialFirst, Function.identity(), item);
-                        partialFollows.entrySet().forEach(x -> x.setValue(appendFirsts(x.getValue(), Terminal<T>::new, item)));
+                        partialFirst = appendFirsts(partialFirst, item);
+                        partialFollows.entrySet().forEach(x -> x.setValue(appendFirsts(x.getValue(), item)));
                         if (item instanceof NonTerminal<T> nt) {
                             partialFollows.computeIfAbsent(nt, $ -> new HashSet<>()).add(List.of());
                         }

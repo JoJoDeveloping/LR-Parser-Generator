@@ -4,11 +4,9 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import jojomodding.parsergenerator.grammar.EndMarker;
 import jojomodding.parsergenerator.grammar.Grammar;
 import jojomodding.parsergenerator.grammar.ProductionItem;
 import jojomodding.parsergenerator.grammar.Terminal;
-import jojomodding.parsergenerator.grammar.TerminalOrEnd;
 import jojomodding.parsergenerator.parsed.AbstractSyntax;
 import jojomodding.parsergenerator.parsed.AbstractSyntaxToken;
 import jojomodding.parsergenerator.parsed.AbstractSyntaxTree;
@@ -37,7 +35,7 @@ public class PushDownAutomaton<T> {
      * The action table. Contains one action for each string of length lookahead.
      * Also must contain action for shorter strings, as long as they end with the EOF marker.
      */
-    private final ArrayList<Map<List<TerminalOrEnd<T>>, Action<T>>> actionTable;
+    private final ArrayList<Map<List<T>, Action<T>>> actionTable;
     /**
      * The goto table, encoding the transition of the characteristic LR(n) automaton.
      */
@@ -50,7 +48,7 @@ public class PushDownAutomaton<T> {
      * @param actionTable the action table.
      * @param gotoTable the goto table.
      */
-    public PushDownAutomaton(Grammar<T> grammar, int lookahead, List<Map<List<TerminalOrEnd<T>>, Action<T>>> actionTable,
+    public PushDownAutomaton(Grammar<T> grammar, int lookahead, List<Map<List<T>, Action<T>>> actionTable,
             List<Map<ProductionItem<T>, Integer>> gotoTable) {
         this.grammar = grammar;
         this.lookahead = lookahead;
@@ -74,7 +72,7 @@ public class PushDownAutomaton<T> {
         LinkedList<AbstractSyntax<T>> dataStack = new LinkedList<>();
         stack.push(0);
         while (true) {
-            var lookahead = Utils.concatLimit(this.lookahead, inputList.stream().map(TerminalOrEnd::ofNullable).toList(), List.of(new EndMarker<T>()));
+            var lookahead = Utils.concatLimit(this.lookahead, inputList, List.of());
             int current = stack.getFirst();
             var nextAction = actionTable.get(current).get(lookahead);
             if (nextAction instanceof ActionShift<T>) {

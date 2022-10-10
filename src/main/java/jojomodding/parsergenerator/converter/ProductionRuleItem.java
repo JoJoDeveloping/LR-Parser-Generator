@@ -3,13 +3,12 @@ package jojomodding.parsergenerator.converter;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 import jojomodding.parsergenerator.grammar.Grammar;
 import jojomodding.parsergenerator.grammar.NonTerminal;
 import jojomodding.parsergenerator.grammar.ProductionItem;
 import jojomodding.parsergenerator.grammar.ProductionRule;
-import jojomodding.parsergenerator.grammar.TerminalOrEnd;
+import jojomodding.parsergenerator.grammar.Terminal;
 
 /**
  * An LR(n) item.
@@ -21,12 +20,12 @@ import jojomodding.parsergenerator.grammar.TerminalOrEnd;
  * @param after The string of grammar items yet to be parsed.
  * @param lookahead The lookahead, an element of Follow(from)
  */
-public record ProductionRuleItem<T>(NonTerminal<T> from, ProductionRule<T> before, ProductionRule<T> after, List<TerminalOrEnd<T>> lookahead) {
+public record ProductionRuleItem<T>(NonTerminal<T> from, ProductionRule<T> before, ProductionRule<T> after, List<T> lookahead) {
 
     /**
      * Check if this item is well-formed, which it is if its core resembles a valid production item.
-     * @param grammar
-     * @return
+     * @param grammar the grammar this must be well-formed under.
+     * @return true iff it is well-formed, false otherwise.
      */
     public boolean isWellFormed(Grammar<T> grammar) {
         return grammar.hasNonTerminal(from) && before().isWellFormed(grammar) && after().isWellFormed(grammar);
@@ -37,7 +36,7 @@ public record ProductionRuleItem<T>(NonTerminal<T> from, ProductionRule<T> befor
                 before.items().stream().map(ProductionItem::format).collect(Collectors.joining(" "))
                 + "_" +
                 after.items().stream().map(ProductionItem::format).collect(Collectors.joining(" "))
-                + " | " + lookahead.stream().map(TerminalOrEnd::format).collect(Collectors.joining(" ")) + "]";
+                + " | " + lookahead.stream().map(x -> new Terminal(x).format()).collect(Collectors.joining(" ")) + "]";
     }
 
     /**
