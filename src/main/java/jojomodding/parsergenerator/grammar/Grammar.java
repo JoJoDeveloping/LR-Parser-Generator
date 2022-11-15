@@ -153,7 +153,7 @@ public class Grammar<T> {
 
     /**
      * Ensures that this grammar is extended.
-     * @see Grammar.isExtended
+     * @see Grammar::isExtended
      */
     public void extend() {
         if (isExtended()) {
@@ -230,9 +230,9 @@ public class Grammar<T> {
         Set<NonTerminal<T>> productiveAndReachable = new HashSet<>(nonTerminals);
         while (true) {
             var reachable = computeReachableNonterminals();
-            var productive = computeProductiveNonterminals(productiveAndReachable);
             boolean change = false;
             change |= productiveAndReachable.retainAll(reachable);
+            var productive = computeProductiveNonterminals(productiveAndReachable);
             change |= productiveAndReachable.retainAll(productive);
             if (!change) {
                 break;

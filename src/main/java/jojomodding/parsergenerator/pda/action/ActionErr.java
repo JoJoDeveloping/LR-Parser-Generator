@@ -6,4 +6,8 @@ package jojomodding.parsergenerator.pda.action;
  */
 public record ActionErr<T>() implements Action<T> {
 
+    @Override
+    public String toString() {
+        return "error";
+    }
 }

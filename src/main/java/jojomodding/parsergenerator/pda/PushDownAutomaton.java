@@ -79,6 +79,7 @@ public class PushDownAutomaton<T> {
                 if (inputList.isEmpty()) {
                     throw new IllegalStateException("Can not shift on EOF!");
                 }
+                var v = gotoTable.get(current).get(new Terminal<>(inputList.peek()));
                 stack.push(gotoTable.get(current).get(new Terminal<>(inputList.peek())));
                 dataStack.push(new AbstractSyntaxToken<>(inputList.peek()));
                 inputList.pop();
@@ -90,7 +91,8 @@ public class PushDownAutomaton<T> {
                     subSyntax.push(dataStack.pop());
                 }
                 current = stack.getFirst();
-                stack.push(gotoTable.get(current).get(red.from()));
+                var next = gotoTable.get(current).get(red.from());
+                stack.push(next);
                 dataStack.push(new AbstractSyntaxTree<>(grammar, red.from(), red.to(), subSyntax));
             } else if (nextAction instanceof ActionAccept<T>) {
                 if (dataStack.size() != 1) {

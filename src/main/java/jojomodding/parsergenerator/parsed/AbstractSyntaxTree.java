@@ -1,13 +1,16 @@
 package jojomodding.parsergenerator.parsed;
 
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import jojomodding.parsergenerator.converter.ProductionRuleItem;
 import jojomodding.parsergenerator.grammar.Grammar;
 import jojomodding.parsergenerator.grammar.NonTerminal;
 import jojomodding.parsergenerator.grammar.ProductionRule;
 import jojomodding.parsergenerator.grammar.Terminal;
+import jojomodding.parsergenerator.utils.Utils;
 
 /**
  * An abstract syntax tree inner node, representing an expanded production rule.
@@ -75,6 +78,32 @@ public class AbstractSyntaxTree<T> implements AbstractSyntax<T>{
 
     @Override
     public String toString() {
-        return "(" + this.element.name() + ":=" + this.children.stream().map(Objects::toString).collect(Collectors.joining(" ")) + ")";
+        return generated.formatter().apply(element, children.stream().map(Object::toString).collect(Collectors.toList()));
+    }
+
+    public void printRun(LinkedList<T> input, String statePrefix) {
+        System.out.println("Input: " + Utils.formatWord(input, Objects::toString));
+        var state = new ProductionRuleItem<T>(this.element, ProductionRule.empty(), this.generated, List.of());
+        System.out.println("State: " + statePrefix + state.formatWihtoutLookahead());
+        var subIter = this.children.iterator();
+        while (!state.isReduce()) {
+            var first = state.firstAfterDot().get();
+            var child = subIter.next();
+            if (first instanceof NonTerminal<T> nt) {
+                AbstractSyntaxTree<T> childTree = (AbstractSyntaxTree<T>) child;
+                System.out.println("Expand " + nt.name() + " to " + new ProductionRuleItem<T>(childTree.element, ProductionRule.empty(), childTree.generated, List.of()).formatWihtoutLookahead());
+                System.out.println();
+                childTree.printRun(input, statePrefix + state.formatWihtoutLookahead() + " ");
+            } else if (first instanceof Terminal<T> t) {
+                System.out.println("Shift " + t.format());
+                input.removeFirst();
+            }
+            System.out.println();
+            state = state.advanceOne();
+            System.out.println("Input: " + Utils.formatWord(input, Objects::toString));
+            System.out.println("State: " + statePrefix + state.formatWihtoutLookahead());
+        }
+        System.out.println("Reduce " + state.formatWihtoutLookahead());
+        return;
     }
 }

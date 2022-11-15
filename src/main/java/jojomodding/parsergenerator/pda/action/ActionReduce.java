@@ -12,4 +12,8 @@ import jojomodding.parsergenerator.grammar.ProductionRule;
  */
 public record ActionReduce<T>(NonTerminal<T> from, ProductionRule<T> to) implements Action<T> {
 
+    @Override
+    public String toString() {
+        return "reduce " + from.name() + " to " + to.toString();
+    }
 }

@@ -5,4 +5,5 @@ package jojomodding.parsergenerator.pda.action;
  */
 public interface Action<T> {
 
+
 }

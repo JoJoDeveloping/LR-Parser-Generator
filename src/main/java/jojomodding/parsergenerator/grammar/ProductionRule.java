@@ -1,13 +1,28 @@
 package jojomodding.parsergenerator.grammar;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import jojomodding.parsergenerator.parsed.AbstractSyntax;
+import jojomodding.parsergenerator.utils.Utils;
 
 /**
  * The right hand side of a production rule.
  * @param items The list of production items. May be empty to represent an epsilon-rule.
  */
-public record ProductionRule<T>(List<ProductionItem<T>> items) {
+public record ProductionRule<T>(List<ProductionItem<T>> items, BiFunction<NonTerminal<T>, List<String>, String> formatter) {
+
+    public ProductionRule(List<ProductionItem<T>> items) {
+        this(items, (element, children) -> "(" + element.name() + ":=" + Utils.formatWord(children, Function.identity()) + ")");
+    }
+
+    @SafeVarargs
+    public ProductionRule(BiFunction<NonTerminal<T>, List<String>, String> formatter, ProductionItem<T>... items) {
+        this(List.of(items), formatter);
+    }
 
     /**
      * Construct a new production rule for a vararg list of items
@@ -17,6 +32,10 @@ public record ProductionRule<T>(List<ProductionItem<T>> items) {
     @SafeVarargs
     public static <T> ProductionRule<T> of(ProductionItem<T>... item) {
         return new ProductionRule<T>(List.of(item));
+    }
+
+    public static <T> ProductionRule<T> empty() {
+        return new ProductionRule<>(List.of());
     }
 
     /**
@@ -30,10 +49,6 @@ public record ProductionRule<T>(List<ProductionItem<T>> items) {
 
     @Override
     public String toString() {
-        if(items.isEmpty()) {
-            return "ε";
-        } else {
-            return items.stream().map(ProductionItem::format).collect(Collectors.joining(" "));
-        }
+        return Utils.formatWord(items, ProductionItem::format);
     }
 }

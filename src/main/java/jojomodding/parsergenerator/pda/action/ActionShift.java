@@ -6,4 +6,8 @@ package jojomodding.parsergenerator.pda.action;
  */
 public record ActionShift<T>() implements Action<T> {
 
+    @Override
+    public String toString() {
+        return "shift";
+    }
 }

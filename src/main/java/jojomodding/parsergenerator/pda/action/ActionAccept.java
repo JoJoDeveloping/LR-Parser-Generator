@@ -5,4 +5,8 @@ package jojomodding.parsergenerator.pda.action;
  */
 public record ActionAccept<T>() implements Action<T> {
 
+    @Override
+    public String toString() {
+        return "accept";
+    }
 }

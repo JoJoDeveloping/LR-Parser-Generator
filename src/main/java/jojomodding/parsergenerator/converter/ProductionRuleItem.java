@@ -9,6 +9,7 @@ import jojomodding.parsergenerator.grammar.NonTerminal;
 import jojomodding.parsergenerator.grammar.ProductionItem;
 import jojomodding.parsergenerator.grammar.ProductionRule;
 import jojomodding.parsergenerator.grammar.Terminal;
+import jojomodding.parsergenerator.utils.Utils;
 
 /**
  * An LR(n) item.
@@ -33,10 +34,17 @@ public record ProductionRuleItem<T>(NonTerminal<T> from, ProductionRule<T> befor
 
     public String toString() {
         return "[" + from().name() + " -> " +
-                before.items().stream().map(ProductionItem::format).collect(Collectors.joining(" "))
-                + "_" +
-                after.items().stream().map(ProductionItem::format).collect(Collectors.joining(" "))
-                + " | " + lookahead.stream().map(x -> new Terminal(x).format()).collect(Collectors.joining(" ")) + "]";
+                Utils.formatWord(before.items(), ProductionItem::format, false)
+                + "•" +
+                Utils.formatWord(after.items(), ProductionItem::format, false)
+                + " | " + Utils.formatWord(lookahead, x -> new Terminal<>(x).format()) + "]";
+    }
+
+    public String formatWihtoutLookahead() {
+        return "[" + from().name() + " -> " +
+                Utils.formatWord(before.items(), ProductionItem::format, false)
+                + "•" +
+                Utils.formatWord(after.items(), ProductionItem::format, false) + "]";
     }
 
     /**
@@ -56,7 +64,7 @@ public record ProductionRuleItem<T>(NonTerminal<T> from, ProductionRule<T> befor
         var before = new LinkedList<>(before().items());
         var after = new LinkedList<>(after().items());
         before.addLast(after.removeFirst());
-        return new ProductionRuleItem<>(from, new ProductionRule<>(before), new ProductionRule<>(after), lookahead);
+        return new ProductionRuleItem<>(from, new ProductionRule<>(before, this.before.formatter()), new ProductionRule<>(after, this.after.formatter()), lookahead);
     }
 
     /**
@@ -65,6 +73,10 @@ public record ProductionRuleItem<T>(NonTerminal<T> from, ProductionRule<T> befor
      * @return True iff the dot is at the very end, otherwise false.
      */
     public boolean isReduce() {
-        return after().items().isEmpty();
+        return firstAfterDot().isEmpty();
+    }
+
+    public boolean isShift() {
+        return firstAfterDot().isPresent() && firstAfterDot().get() instanceof Terminal<T>;
     }
 }

@@ -5,7 +5,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 public class Utils {
 
@@ -47,6 +49,15 @@ public class Utils {
             res.add(t);
         }
         return res;
+    }
+
+    public static <T> String formatWord(List<T> word, Function<T, String> formatChar) {
+        return formatWord(word, formatChar, true);
+    }
+    public static <T> String formatWord(List<T> word, Function<T, String> formatChar, boolean epsilon) {
+        if (epsilon && word.isEmpty())
+            return "ε";
+        return word.stream().map(formatChar).collect(Collectors.joining(" "));
     }
 
 }
