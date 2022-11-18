@@ -33,7 +33,10 @@ public class Main {
 //        System.out.println(pg.run("cdeecddcaaccd".chars().mapToObj(x -> (char) x).toList()));
 //        var pg = new ParserGenerator<>(sameAB2(), 1).build();
 //        System.out.println(pg.run("aabbbbaa".chars().mapToObj(x -> (char) x).toList()));
-        var pg = new ParserGenerator<>(ex33(), 0).build();
+        var pglalr = new ParserGenerator<>(anbn(), 1, 1).build();
+        var pg = new ParserGenerator<>(anbn(), 1, 0).build();
+        var pgslr = new ParserGenerator<>(anbn(), 0, -1).build();
+//        new ParserGenerator<>(anbn(), 0).build();
     }
 
     public static Grammar<Character> TE() {
@@ -117,6 +120,17 @@ public class Main {
         Grammar<Character> anbn = new Grammar<>(List.of("S"), "S");
         anbn.addProduction("S", of());
         anbn.addProduction("S", of(t('a'), n("S"), t('b')));
+        return anbn;
+    }
+
+    public static Grammar<Character> anbn_lr0() {
+        Grammar<Character> anbn = new Grammar<>(List.of("S", "A", "E"), "S");
+        anbn.addProduction("S", of(n("A")));
+
+        anbn.addProduction("A", of(t('a'), n("A"), t('b')));
+        anbn.addProduction("A", of(t('a'), t('b')));
+
+        anbn.addProduction("E", of());
         return anbn;
     }
 

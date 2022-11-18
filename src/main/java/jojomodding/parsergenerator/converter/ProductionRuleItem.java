@@ -3,7 +3,6 @@ package jojomodding.parsergenerator.converter;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import jojomodding.parsergenerator.grammar.Grammar;
 import jojomodding.parsergenerator.grammar.NonTerminal;
 import jojomodding.parsergenerator.grammar.ProductionItem;
@@ -79,4 +78,6 @@ public record ProductionRuleItem<T>(NonTerminal<T> from, ProductionRule<T> befor
     public boolean isShift() {
         return firstAfterDot().isPresent() && firstAfterDot().get() instanceof Terminal<T>;
     }
+
+
 }

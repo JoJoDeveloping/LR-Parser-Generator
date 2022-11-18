@@ -51,6 +51,23 @@ public class Utils {
         return res;
     }
 
+    /**
+     * Concatenate two lists so that the result is not longer than length.
+     * In other words, compute length : (first ++ second)
+     * @param length the maximal length of the result
+     * @param x the list
+     * @return the longest prefix of x that has a length <= length
+     * @param <T> the type of list entries
+     */
+    public static <T> List<T> limit(int length, List<T> x) {
+        ArrayList<T> res = new ArrayList<>(length);
+        for (T t : x) {
+            if (res.size() >= length) return res;
+            res.add(t);
+        }
+        return res;
+    }
+
     public static <T> String formatWord(List<T> word, Function<T, String> formatChar) {
         return formatWord(word, formatChar, true);
     }

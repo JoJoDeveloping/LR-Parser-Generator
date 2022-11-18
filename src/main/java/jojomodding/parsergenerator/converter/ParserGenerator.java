@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -26,18 +27,20 @@ import jojomodding.parsergenerator.utils.MutablePair;
 import jojomodding.parsergenerator.utils.Utils;
 
 /**
- * This class converts a grammar into an LR(n) parser.
+ * This class converts a grammar into an LR(n) grammar. Also supports LA(k)LR(n-k) and SLR(n)
  */
 public class ParserGenerator<T> {
 
     /**
-     * The n. If n == 0, this value is 1 instead.
+     * This parser generator is for an LR(lrn) grammar, or an LA(lak)LR(lrn-lak) grammar.
      */
-    private final int n;
+    private final int lrn_maybezero;
+    private final int lrn;
     /**
-     * The actual n. May be 0.
+     * This parser generator is for an LR(lrn) grammar, or an LA(lak)LR(lrn-lak) grammar.
+     * If lr
      */
-    private final int n_actual;
+    private final int lak;
     /**
      * The grammar to convert. This grammar is always reduced and extended.
      */
@@ -54,31 +57,52 @@ public class ParserGenerator<T> {
     /**
      * Constructs a new parser generator.
      *
+     * If lak == -1, then lrn must be 0, and we will construct the SLR(0) parser.
+     * If lak == lrn == n, then we construct the LR(n) parser
+     * If lak == 0, lrn == n, then we construct the LALR(n) parser.
+     * In general, for lak <= lrn, we construct the LA(lak)LR(lrn-lak) parser.
+     *
      * @param grammar the grammar for which a PDA is to be generated.
-     * @param n       The lookahead size.
+     * @param lrn       The lookahead size.
      */
-    public ParserGenerator(Grammar<T> grammar, int n) {
+    public ParserGenerator(Grammar<T> grammar, int lrn, int lak) {
         grammar.reduce();
         grammar.extend();
         this.grammar = grammar;
-        this.n_actual = n;
-        this.n = Math.max(n, 1);
+        this.lrn_maybezero = lrn;
+        this.lrn = Integer.max(1, lrn);
+        this.lak = lak;
+        if ((lak == -1 && lrn != 0) || !(lak <= lrn && lak >= -1)) {
+            throw new IllegalArgumentException("Invalid LA LR combination!");
+        }
         computeFirstFollow();
     }
 
+    private String kind() {
+        if (lak == lrn_maybezero) {
+            return "LR(" + lrn_maybezero + ")";
+        } else if (lak == -1) {
+            return "SLR(" + lrn_maybezero + ")";
+        } else if (lak == 0) {
+            return "LALR(" + lrn_maybezero + ")";
+        } else {
+            return "LA(" + lak + ")LR(" + (lrn_maybezero - lak) + ")";
+        }
+    }
+
     /**
-     * Builds the PDA, which has lookahead n, or 1 if n==0. It does so by constructing the LR(n_actual) automaton.
+     * Builds the PDA, which has lookahead n, or 1 if n==0. It does so by constructing the LR(n) automaton, or a variation thereof.
      *
      * @return The PDA for this grammar.
-     * @throws IllegalArgumentException If the grammar is not LR(n_actual)
+     * @throws IllegalArgumentException If the grammar is not of correct kind.
      */
     public PushDownAutomaton<T> build() {
         var transitions = buildDFA();
-        Map<Set<ProductionRuleItem<T>>, Integer> labeling = new HashMap<>();
-        Set<ProductionRuleItem<T>> initial = null, error = Set.of();
+        Map<CharacteristicState<T>, Integer> labeling = new HashMap<>();
+        CharacteristicState<T> initial = null, error = new CharacteristicState<>(lak);
         labeling.put(error, -1);
         for (var k : transitions.keySet()) {
-            if (k.stream().anyMatch(x -> x.from().equals(grammar.getInitial()) && x.before().items().isEmpty())) {
+            if (k.getAll().stream().anyMatch(x -> x.from().equals(grammar.getInitial()) && x.before().items().isEmpty())) {
                 initial = k;
             }
         }
@@ -92,11 +116,11 @@ public class ParserGenerator<T> {
         }
         var errorID = labeling.get(error);
         System.out.println("Initial: " + labeling.get(initial));
-        List<Entry<Set<ProductionRuleItem<T>>, Integer>> toSort = new ArrayList<>(labeling.entrySet());
+        List<Entry<CharacteristicState<T>, Integer>> toSort = new ArrayList<>(labeling.entrySet());
         toSort.sort(Comparator.comparingInt(Entry::getValue));
         boolean hasConflicts = false;
         System.out.println("GoTo table:");
-        for (Entry<Set<ProductionRuleItem<T>>, Integer> e : toSort) {
+        for (Entry<CharacteristicState<T>, Integer> e : toSort) {
             System.out.println("  State: " + e.getValue() + " " + e.getKey());
             for (var to : transitions.get(e.getKey()).entrySet()) {
                 var target = labeling.get(to.getValue());
@@ -109,104 +133,106 @@ public class ParserGenerator<T> {
                 hasConflicts = true;
             }
         }
-        if (hasConflicts) {
-            throw new IllegalArgumentException("Grammar is not LR(" + n_actual + ")!");
-        } else {
-            System.out.println("Grammar is LR(" + n_actual + ")");
-        }
+        System.out.println("Action table:");
         List<Map<List<T>, Action<T>>> actionTable = new ArrayList<>(i);
         List<Map<ProductionItem<T>, Integer>> gotoTable = new ArrayList<>(i);
         for (int j = 0; j < i; j++) {
             actionTable.add(new HashMap<>());
             gotoTable.add(new HashMap<>());
         }
-        for (Entry<Set<ProductionRuleItem<T>>, Integer> e : labeling.entrySet()) {
-            if (e.getKey().isEmpty()) {
+        for (Entry<CharacteristicState<T>, Integer> e : toSort) {
+            System.out.println("  State: " + e.getValue() + " " + e.getKey());
+            if (e.getKey().getAll().isEmpty()) {
                 continue;
             }
             Map<ProductionItem<T>, Integer> gotoEntry = gotoTable.get(e.getValue());
             Map<List<T>, Action<T>> actionEntry = actionTable.get(e.getValue());
+            BiConsumer<List<T>, Action<T>> addActionEntry = (a,b) -> {
+                System.out.println("    upon " + Utils.formatWord(a, Objects::toString, true) + " -> " + b.toString());
+                actionEntry.put(a, b);
+            };
             for (var to : transitions.get(e.getKey()).entrySet()) {
-                if (to.getValue().isEmpty()) {
+                if (to.getValue().getAll().isEmpty()) {
                     continue;
                 }
                 gotoEntry.put(to.getKey(), labeling.get(to.getValue()));
             }
-            for (var state : e.getKey()) {
+            for (var state : e.getKey().getAll()) {
                 if (state.firstAfterDot().isEmpty()) {
                     if (!state.from().equals(grammar.getInitial())) {
-                        if (n_actual == 0) {
-                            for (var x : follow.get(state.from())) {
-                                actionEntry.put(x, new ActionReduce<>(state.from(), state.before()));
-                            }
-                        } else {
-                            actionEntry.put(state.lookahead(), new ActionReduce<>(state.from(), state.before()));
+                        for (var la : lookaheadFor(state, false)) {
+                            addActionEntry.accept(la, new ActionReduce<>(state.from(), state.before()));
                         }
                     } else if (state.from().equals(grammar.getInitial()) && state.lookahead().equals(List.of())) {
-                        actionEntry.put(List.of(), new ActionAccept<>());
+                        addActionEntry.accept(List.of(), new ActionAccept<>());
                     }
                 } else if (state.isShift()) {
-                    for (List<T> lookahead : lookaheadFor(state)) {
-                        actionEntry.put(lookahead, new ActionShift<>());
+                    for (List<T> lookahead : lookaheadFor(state, false)) {
+                        addActionEntry.accept(lookahead, new ActionShift<>());
                     }
                 }
             }
         }
-        System.out.println("Action table:");
-        for (Entry<Set<ProductionRuleItem<T>>, Integer> e : toSort) {
-            System.out.println("  State: " + e.getValue() + " " + e.getKey());
-            if (e.getValue() < 0) continue;
-            for (Entry<List<T>, Action<T>> ent : actionTable.get(e.getValue()).entrySet()) {
-                if (ent.getValue() == null) continue;
-                System.out.println("    upon " + Utils.formatWord(ent.getKey(), Objects::toString, true) + " -> " + ent.getValue().toString());
-            }
+        if (hasConflicts) {
+            throw new IllegalArgumentException("Grammar is not " + kind() + "!");
+        } else {
+            System.out.println("Grammar is " + kind() + "!");
         }
-
-        return new PushDownAutomaton<>(grammar, n, actionTable, gotoTable);
+        return new PushDownAutomaton<>(grammar, lrn, actionTable, gotoTable);
     }
 
     /**
      * Given a PDA item X -> a . b | c, computes First(b) ++ c, capped at length n. In other words, compute all possible lookaheads under which this
-     * rule is applicable. If n==0, we consider that c = Follow(X)
+     * rule is applicable. If lak == -1, we consider c = Follow(X)
      *
-     * @param s The production item, i.e. X -> a . b | C
+     * @param s                  The production item, i.e. X -> a . b | C
+     * @param duringConstruction
      * @return The set of next possible parsed strings, up to length n.
      */
-    private Set<List<T>> lookaheadFor(ProductionRuleItem<T> s) {
+    private Set<List<T>> lookaheadFor(ProductionRuleItem<T> s, boolean duringConstruction) {
+        if (duringConstruction && lrn_maybezero == 0) {
+            return Set.of(List.of());
+        }
         Set<List<T>> firsts = Set.of(List.of());
         for (var nt : s.after().items()) {
             firsts = appendFirsts(firsts, nt);
         }
-        return n_actual == 0 ? firsts : appendAll(firsts, () -> Stream.of(s.lookahead()));
+        Stream<List<T>> k;
+        if (lak == -1) {
+            k = follow.get(s.from()).stream();
+        } else if (lrn_maybezero == 0) {
+            k = Stream.concat(Stream.of(List.of()), grammar.getTerminals().stream().map(List::of));
+        } else {
+            k = Stream.of(s.lookahead());
+        }
+        return appendAll(firsts, () -> k);
     }
 
     /**
      * This checks whether a state in the power-set automaton for the LR(n) automaton is adequate. A state is not adequate if it has a Shift-Shift- or
-     * a Shift-Reduce-Conflict. For n==0, we do not look at the lookahead, but instead consider the follow sets, like in @see lookaheadFor
+     * a Shift-Reduce-Conflict.
      *
      * @param state     The state
      * @param stateName The state name, used to print conflicts.
      * @return True iff there is no conflict, otherwise false.
      */
-    private boolean isStateAdequate(Set<ProductionRuleItem<T>> state, String stateName) {
-        List<ProductionRuleItem<T>> lst = new ArrayList<>(state);
+    private boolean isStateAdequate(CharacteristicState<T> state, String stateName) {
+        List<ProductionRuleItem<T>> lst = new ArrayList<>(state.getAll());
         boolean adequate = true;
         for (int i = lst.size() - 1; i >= 0; i--) {
             var state1 = lst.get(i);
             for (int j = 0; j < lst.size(); j++) {
                 var state2 = lst.get(j);
                 if (i < j && state1.isReduce() && state2.isReduce() && !state1.equals(state2)) {
-                    if (n_actual == 0 ? follow.get(state1.from()).stream().anyMatch(follow.get(state2.from())::contains)
-                            : state1.lookahead().equals(state2.lookahead())) {
-                        System.out.println("Reduce-Reduce-Conflict in " + stateName + ": " + state1 + " vs " + state2);
+                    if (lookaheadFor(state1, false).stream().anyMatch(lookaheadFor(state2, false)::contains)) {
+                        System.out.println("    Reduce-Reduce-Conflict in " + stateName + ": " + state1 + " vs " + state2);
                         adequate = false;
                     }
                 }
                 var state2FA = state2.firstAfterDot();
                 if (state1.isReduce() && state2FA.isPresent() && state2FA.get() instanceof Terminal<T> t) {
-                    if (n_actual == 0 ? follow.get(state1.from()).contains(List.of(t.terminal()))
-                            : lookaheadFor(state2).contains(state1.lookahead())) {
-                        System.out.println("Shift-Reduce-Conflict in " + stateName + ": " + state2 + " vs " + state1);
+                    if (lookaheadFor(state1, false).stream().anyMatch(lookaheadFor(state2, false)::contains)) {
+                        System.out.println("    Shift-Reduce-Conflict in " + stateName + ": " + state2 + " vs " + state1);
                         adequate = false;
                     }
                 }
@@ -221,22 +247,20 @@ public class ParserGenerator<T> {
      * @param items the state, without epsilon transitions
      * @return The epsilon-closure of items.
      */
-    private Set<ProductionRuleItem<T>> closure(Set<ProductionRuleItem<T>> items) {
-        var res = new HashSet<>(items);
+    private CharacteristicState<T> closure(Set<ProductionRuleItem<T>> items) {
+        var res = new CharacteristicState<T>(lak);
+        items.forEach(res::addCompacting);
         while (true) {
             boolean change = false;
-            for (var item : Set.copyOf(res)) {
+            for (var item : Set.copyOf(res.getAll())) {
                 if (item.firstAfterDot().isEmpty()) {
                     continue;
                 }
                 if (item.firstAfterDot().get() instanceof NonTerminal<T> nt) {
-                    Set<List<T>> followed = Set.of(List.of());
-                    if (n_actual > 0) {
-                        followed = lookaheadFor(item.advanceOne());
-                    }
+                    Set<List<T>> followed = lookaheadFor(item.advanceOne(), true);
                     for (var prod : grammar.getProductionRules().get(nt)) {
                         for (var lookahead : followed) {
-                            change |= res.add(new ProductionRuleItem<>(nt, new ProductionRule<>(List.of(), prod.formatter()), prod, lookahead));
+                            change |= res.addCompacting(new ProductionRuleItem<>(nt, new ProductionRule<>(List.of(), prod.formatter()), prod, lookahead));
                         }
                     }
                 }
@@ -253,32 +277,49 @@ public class ParserGenerator<T> {
      *
      * @return The LR(n) DFA.
      */
-    private Map<Set<ProductionRuleItem<T>>, Map<ProductionItem<T>, Set<ProductionRuleItem<T>>>> buildDFA() {
-        Map<Set<ProductionRuleItem<T>>, Map<ProductionItem<T>, Set<ProductionRuleItem<T>>>> result = new HashMap<>();
-        Set<Set<ProductionRuleItem<T>>> states = new HashSet<>();
-        states.add(closure(Set.of(
-                new ProductionRuleItem<>(grammar.getInitial(), new ProductionRule<>(List.of(), grammar.getInitialProductionRule().formatter()), grammar.getInitialProductionRule(), List.of()))));
+    private Map<CharacteristicState<T>, Map<ProductionItem<T>, CharacteristicState<T>>> buildDFA() {
+        Map<CharacteristicState<T>, Map<ProductionItem<T>, CharacteristicState<T>>> result = new HashMap<>();
+        Map<CharacteristicState<T>, CharacteristicState<T>> uniqueify = new HashMap<>();
+        var startstate = closure(Set.of(new ProductionRuleItem<>(grammar.getInitial(), new ProductionRule<>(List.of(), grammar.getInitialProductionRule().formatter()), grammar.getInitialProductionRule(), List.of())));
+        uniqueify.put(startstate, startstate);
+        result.put(new CharacteristicState<>(lak), Map.of());
         outer:
         while (true) {
-            for (var state : states) {
-                for (var it : grammar.getProductionItems()) {
-                    var map1 = result.computeIfAbsent(state, k -> new HashMap<>());
-                    if (map1.containsKey(it)) {
-                        continue;
-                    }
-                    var start = new HashSet<ProductionRuleItem<T>>();
-                    for (var item : state) {
-                        var head = item.firstAfterDot();
-                        if (head.isPresent() && head.get().equals(it)) {
-                            start.add(item.advanceOne());
+            for (var state : uniqueify.values()) {
+                var map1 = result.get(state);
+                if (map1 != null) continue;
+                map1 = new HashMap<>();
+                result.put(state, map1);
+                Map<ProductionItem<T>, Set<ProductionRuleItem<T>>> byInitial = new HashMap<>();
+                for (var item : state.getAll()) {
+                    var head = item.firstAfterDot();
+                    if (head.isEmpty()) continue;
+                    byInitial.computeIfAbsent(head.get(), $ -> new HashSet<>()).add(item.advanceOne());
+                }
+                boolean change = false;
+                for (var e : byInitial.entrySet()) {
+                    var it = e.getKey();
+                    var start = e.getValue();
+                    var lfp = closure(start);
+                    var uniq = uniqueify.get(lfp);
+                    if (uniq == null) {
+                        uniqueify.put(lfp, lfp);
+                        map1.put(it, lfp);
+                        change = true;
+                    } else {
+                        map1.put(it, uniq);
+                        boolean uniqStale = false;
+                        for (var x : lfp.getAll()) {
+                            uniqStale |= uniq.addCompacting(x);
+                        }
+                        change |= uniqStale;
+                        if (uniqStale) {
+                            result.remove(uniq);
                         }
                     }
-                    var lfp = closure(start);
-                    map1.put(it, lfp);
-                    if (states.add(lfp)) {
-                        continue outer;
-                    }
                 }
+                if(change)
+                    continue outer;
             }
             break;
         }
@@ -294,7 +335,7 @@ public class ParserGenerator<T> {
      * @return the set of truncated concatenations.
      */
     private <U> Set<List<U>> appendAll(Set<List<U>> w, Supplier<Stream<List<U>>> u) {
-        return w.stream().flatMap(x -> u.get().map(y -> Utils.concatLimit(n, x, y))).collect(Collectors.toUnmodifiableSet());
+        return w.stream().flatMap(x -> u.get().map(y -> Utils.concatLimit(lrn, x, y))).collect(Collectors.toUnmodifiableSet());
     }
 
     /**
@@ -337,7 +378,7 @@ public class ParserGenerator<T> {
                         }
                     }
                     partialFollows.forEach(w -> w.setSecond(
-                            w.getSecond().stream().flatMap(x -> follow.get(T).stream().map(y -> Utils.concatLimit(n, x, y)))
+                            w.getSecond().stream().flatMap(x -> follow.get(T).stream().map(y -> Utils.concatLimit(lrn, x, y)))
                                     .collect(Collectors.toUnmodifiableSet())));
                     change |= first.get(T).addAll(partialFirst);
                     for (var e : partialFollows) {

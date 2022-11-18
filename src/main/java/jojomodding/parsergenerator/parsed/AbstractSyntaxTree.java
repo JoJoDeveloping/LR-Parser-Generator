@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 import jojomodding.parsergenerator.converter.ProductionRuleItem;
 import jojomodding.parsergenerator.grammar.Grammar;
 import jojomodding.parsergenerator.grammar.NonTerminal;
+import jojomodding.parsergenerator.grammar.ProductionItem;
 import jojomodding.parsergenerator.grammar.ProductionRule;
 import jojomodding.parsergenerator.grammar.Terminal;
 import jojomodding.parsergenerator.utils.Utils;
@@ -104,6 +105,36 @@ public class AbstractSyntaxTree<T> implements AbstractSyntax<T>{
             System.out.println("State: " + statePrefix + state.formatWihtoutLookahead());
         }
         System.out.println("Reduce " + state.formatWihtoutLookahead());
-        return;
+    }
+
+    public void printRMD(LinkedList<T> input, LinkedList<ProductionItem<T>> prefix, String statePrefix) {
+        var state = new ProductionRuleItem<T>(this.element, ProductionRule.empty(), this.generated, List.of());
+        var subIter = this.children.iterator();
+        while (!state.isReduce()) {
+            var first = state.firstAfterDot().get();
+            var child = subIter.next();
+            if (first instanceof NonTerminal<T> nt) {
+                AbstractSyntaxTree<T> childTree = (AbstractSyntaxTree<T>) child;
+                childTree.printRMD(input, prefix, statePrefix + state.formatWihtoutLookahead() + " ");
+            } else if (first instanceof Terminal<T> t) {
+                System.out.println("Input: " + Utils.formatWord(input, Objects::toString));
+                System.out.println("Prefix: " + Utils.formatWord(prefix, ProductionItem::format));
+                System.out.println("State: " + statePrefix + state.formatWihtoutLookahead());
+                System.out.println("Shift " + t.format());
+                System.out.println();
+                input.removeFirst();
+                prefix.addLast(first);
+            }
+            state = state.advanceOne();
+        }
+        System.out.println("Input: " + Utils.formatWord(input, Objects::toString));
+        System.out.println("Prefix: " + Utils.formatWord(prefix, ProductionItem::format));
+        System.out.println("State: " + statePrefix + state.formatWihtoutLookahead());
+        System.out.println("Reduce " + state.formatWihtoutLookahead());
+        System.out.println();
+        for(var x : this.generated.items()) {
+            prefix.removeLast();
+        }
+        prefix.addLast(this.element);
     }
 }

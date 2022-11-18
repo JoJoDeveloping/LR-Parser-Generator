@@ -5,7 +5,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
-import java.util.Stack;
 import java.util.stream.Collectors;
 import jojomodding.parsergenerator.converter.ProductionRuleItem;
 import jojomodding.parsergenerator.grammar.Grammar;
@@ -53,7 +52,7 @@ public class InteractiveNondeterministicPDA<T> {
                     stack.addLast(top.advanceOne());
                 } else if (ffirst instanceof NonTerminal<T> nt) {
                     var v1 = new ArrayList<>(grammar.getProductionRules().getOrDefault(nt, Set.of()));
-                    var v = v1.stream().map(x -> new ProductionRuleItem<T>(nt, ProductionRule.empty(), x, List.of())).collect(Collectors.toList());
+                    var v = v1.stream().map(x -> new ProductionRuleItem<T>(nt, ProductionRule.empty(), x, List.of())).toList();
                     if (v.isEmpty()) {
                         System.err.println("We can not expand " + nt.name() + ", there are no production rules!");
                         return false;
